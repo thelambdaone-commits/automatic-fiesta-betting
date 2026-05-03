@@ -141,11 +141,13 @@ class CopyBettingKeyboardMixin:
         if nav_row:
             rows.append(nav_row)
         
-        # Action row
+        # Action rows
         rows.append([
-            {"text": "🔄 Refresh", "callback_data": "history_refresh"},
-            {"text": "⬅️ Retour", "callback_data": "menu:mes_wallets"},
+            {"text": "🔄 Actualiser", "callback_data": "history_refresh"},
             {"text": "🏠 Accueil", "callback_data": "menu"},
+        ])
+        rows.append([
+            {"text": "⬅️ Retour", "callback_data": "menu:mes_wallets"},
         ])
         
         return {"inline_keyboard": rows}

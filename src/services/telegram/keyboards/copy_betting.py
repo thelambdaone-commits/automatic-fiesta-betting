@@ -143,6 +143,11 @@ class CopyBettingKeyboardMixin:
         
         # Action rows
         rows.append([
+            {"text": "📜 Historique", "callback_data": "trade_history"},
+            {"text": "📋 Ordres", "callback_data": "wallet_orders"},
+            {"text": "💼 Positions", "callback_data": "wallet_positions"},
+        ])
+        rows.append([
             {"text": "🔄 Actualiser", "callback_data": "history_refresh"},
             {"text": "🏠 Accueil", "callback_data": "menu"},
         ])

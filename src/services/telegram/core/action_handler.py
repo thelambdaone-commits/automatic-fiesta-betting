@@ -200,6 +200,14 @@ class ActionHandler(
             return self._wallet_history_text(page=0), history_keyboard(page=0, total_pages=getattr(self, '_history_total_pages', 1))
         if action == "active_trades":
             return self._active_trades_text(), self.trades_keyboard()
+        if action == "wallet_orders":
+            wallet = self._active_wallet()
+            if not wallet: return "⚠️ Aucun wallet actif.", self.mes_wallets_keyboard()
+            return self._handle_wallet_orders(wallet), history_keyboard(page=0, total_pages=1)
+        if action == "wallet_positions":
+            wallet = self._active_wallet()
+            if not wallet: return "⚠️ Aucun wallet actif.", self.mes_wallets_keyboard()
+            return self._handle_wallet_positions(wallet), history_keyboard(page=0, total_pages=1)
         if action == "history_next":
             page = getattr(self, '_history_page', 0) + 1
             self._history_page = page

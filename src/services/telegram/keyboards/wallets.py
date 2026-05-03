@@ -28,18 +28,18 @@ class WalletsKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "👀 Mes wallets", "callback_data": "wallet_mirror"},
-                    {"text": "➕ Ajouter un wallet", "callback_data": "mirror_add_prompt"},
+                    {"text": "🎯 Voir les cibles", "callback_data": "wallet_mirror"},
+                    {"text": "➕ Ajouter une cible", "callback_data": "mirror_add_prompt"},
                 ],
                 [
-                    {"text": "🔍 Rechercher un wallet", "callback_data": "wallet_search"},
+                    {"text": "🔍 Chercher un wallet", "callback_data": "wallet_search"},
                     trade_btn,
                 ],
                 [
-                    {"text": "📜 Historique", "callback_data": "trade_history"},
+                    {"text": "📜 Mon historique", "callback_data": "trade_history"},
                 ],
                 [
-                    {"text": "📲 Changer de wallet", "callback_data": "user_wallet_select"},
+                    {"text": "📲 Changer de cible active", "callback_data": "user_wallet_select"},
                 ],
                 [
                     {"text": "⬅️ Retour", "callback_data": "menu"},

@@ -19,7 +19,10 @@ class MainKeyboardMixin:
                     {"text": "🔗 Copy Betting", "callback_data": "menu:copy_trading"},
                 ],
                 [
-                    {"text": "👛 Mes wallets", "callback_data": "menu:mes_wallets"},
+                    {"text": "🎯 Cibles Mirror", "callback_data": "menu:mes_wallets"},
+                ],
+                [
+                    {"text": "🧬 Mon Wallet", "callback_data": "my_wallet_full"},
                 ],
                 [
                     {"text": "🧭 Découvrir", "callback_data": "menu:decouvrir"},

@@ -10,6 +10,7 @@ from ..keyboards.discover import DiscoverKeyboardMixin
 from ..keyboards.settings import SettingsKeyboardMixin
 from ..top_wallets import TelegramTopWalletsMixin
 from ..copy_modules.mirror import TelegramCopyMirrorMixin
+from ..wallet import TelegramWalletMixin
 
 # Import history_keyboard function
 def history_keyboard(page: int = 0, total_pages: int = 1) -> Dict:
@@ -27,6 +28,7 @@ class ActionHandler(
     SettingsKeyboardMixin,
     TelegramTopWalletsMixin,
     TelegramCopyMirrorMixin,
+    TelegramWalletMixin,
 ):
     """Handles all bot actions and callbacks."""
     
@@ -62,6 +64,8 @@ class ActionHandler(
             return "🧭 *Découvrir*\n\nTrouve de nouveaux wallets et marchés.", self.decouvrir_keyboard()
         if action == "menu:parametres":
             return self._settings_menu(), self.parametres_keyboard()
+        if action == "my_wallet_full":
+            return self._my_wallet_full(), self.keyboard()
         
         # Handle specific actions
         if action.startswith("menu:"):
@@ -309,18 +313,18 @@ class ActionHandler(
     def _mes_wallets_text(self) -> str:
         return "\n".join(
             [
-                "👛 *Mes Wallets*",
+                "🎯 *Cibles Mirroring*",
                 "",
                 self._active_wallet_line(),
                 "",
-                "Gérer tes wallets et stratégies.",
+                "Gérer les wallets que vous copiez automatiquement.",
             ]
         )
 
     def _wallet_selection_text(self) -> str:
         wallets = self._configured_wallets()
         lines = [
-            "*👀 Voir wallets*",
+            "🎯 *Wallets suivis (Mirror)*",
             "",
             self._active_wallet_line(),
             "",

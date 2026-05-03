@@ -13,6 +13,7 @@ class WalletScannerClient(LoggerMixin):
     
     def __init__(self):
         self.gamma_host = Config.GAMMA_API_HOST.rstrip('/')
+        self.data_api_host = Config.DATA_API_HOST.rstrip('/')
         self.polygon_api_key = Config.POLYGONSCAN_API_KEY
         
     def fetch_profile(self, address: str) -> Dict:
@@ -24,16 +25,22 @@ class WalletScannerClient(LoggerMixin):
                 timeout=10
             )
             if response.ok:
-                return response.json()
+                profile = response.json()
+                if isinstance(profile, dict):
+                    # Ensure proxyWallet is available
+                    if not profile.get("proxyWallet") and not profile.get("proxy_wallet"):
+                        # If address is already a proxy, this might be empty
+                        pass
+                    return profile
         except Exception as e:
-            logger.error(f"Failed to fetch profile: {e}")
+            logger.error(f"Failed to fetch profile for {address}: {e}")
         return {}
     
     def fetch_wallet_data(self, endpoint: str, params: Dict) -> List[Dict]:
-        """Fetch data from Polymarket API."""
+        """Fetch data from Polymarket API (CLOB or Gamma)."""
         try:
-            # Use CLOB API for orders/trades
-            if endpoint in ["orders", "trades"]:
+            # Use CLOB API for orders
+            if endpoint == "orders":
                 url = f"https://clob.polymarket.com/{endpoint.lstrip('/')}"
             else:
                 url = f"{self.gamma_host}/{endpoint.lstrip('/')}"
@@ -41,16 +48,28 @@ class WalletScannerClient(LoggerMixin):
             response = requests.get(url, params=params, timeout=10)
             if response.ok:
                 data = response.json()
-                # Handle both list and dict responses
                 if isinstance(data, list):
                     return data
                 elif isinstance(data, dict):
-                    if 'data' in data:
-                        return data['data']
-                    return [data]
-                return []
+                    return data.get('data') or data.get('results') or [data]
         except Exception as e:
-            logger.error(f"Failed to fetch {endpoint}: {e}")
+            logger.debug(f"Failed to fetch {endpoint} from Gamma/CLOB: {e}")
+        return []
+
+    def fetch_data_api(self, endpoint: str, params: Dict) -> List[Dict]:
+        """Fetch data from Polymarket Data API (historical activity/positions)."""
+        try:
+            url = f"{self.data_api_host}/{endpoint.lstrip('/')}"
+            response = requests.get(url, params=params, timeout=10)
+            if response.ok:
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                elif isinstance(data, dict):
+                    # Data API often wraps in data, results, or activity
+                    return data.get('data') or data.get('results') or data.get('activity') or []
+        except Exception as e:
+            logger.debug(f"Failed to fetch {endpoint} from Data API: {e}")
         return []
     
     def fetch_json(self, url: str, params: Dict, warn: bool = True) -> Dict:

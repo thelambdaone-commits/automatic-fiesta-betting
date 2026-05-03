@@ -32,11 +32,12 @@ class WalletsKeyboardMixin:
                     {"text": "➕ Ajouter un mirroir", "callback_data": "mirror_add_prompt"},
                 ],
                 [
+                    {"text": "🧬 Mes Wallets", "callback_data": "my_wallet_full"},
                     {"text": "🔍 Chercher un wallet", "callback_data": "wallet_search"},
-                    trade_btn,
                 ],
                 [
                     {"text": "📜 Mon historique", "callback_data": "trade_history"},
+                    {"text": "🎲 Pari manuel", "callback_data": "manual_trade"},
                 ],
                 [
                     {"text": "📲 Changer de mirroir actif", "callback_data": "user_wallet_select"},

@@ -22,9 +22,6 @@ class MainKeyboardMixin:
                     {"text": "🎯 Mirroirs", "callback_data": "menu:mes_wallets"},
                 ],
                 [
-                    {"text": "🧬 Wallets", "callback_data": "my_wallet_full"},
-                ],
-                [
                     {"text": "🧭 Découvrir", "callback_data": "menu:decouvrir"},
                 ],
                 [

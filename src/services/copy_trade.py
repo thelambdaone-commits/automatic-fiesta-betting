@@ -154,25 +154,12 @@ class PolymarketTrader:
         Args:
             token_id: Market identifier
             direction: Order direction (BUY/SELL)
-            amount: Order amount (USDC amount for BUY, position proportion for SELL)
+            amount: Order amount (USDC amount for BUY, shares for SELL)
         """
         try:
             direction = self.normalize_side(direction)
-            if direction == "BUY":
-                balance_info = self.check_cash_balance()
-                if balance_info is None:
-                    logger.error("Unable to get balance info, exiting trade")
-                    return
-
-                balance = float(balance_info['balance'])
-                if balance < amount:
-                    logger.error(f"Insufficient balance: current balance: {balance}, required: {amount}")
-                    return
-            else:
-                position_size = get_target_position_size(self.wallet_address, token_id)
-                if position_size < amount:
-                    logger.error(f"Insufficient position size: current position size: {position_size}, required: {amount}")
-                    return
+            
+            # Note: Balance/Position checks are now done in execute_trade for better control
 
             # create a market order
             order_args = MarketOrderArgs(
@@ -212,50 +199,61 @@ class PolymarketTrader:
             smart_profile = get_profile(source_wallet)
             smart_simulation = bool(smart_profile and smart_profile.get("simulation", True))
             
-            # === RISK MANAGEMENT CHECKS ===
+            # === RISK MANAGEMENT & SIZE CALCULATION ===
             
-            # 1. Check user balance, or use the declared simulated portfolio
-            # for Smart Copy dry-runs.
-            if smart_simulation:
-                user_balance = float(smart_profile.get("portfolio_amount", 0) or 0)
-            else:
-                balance_info = self.check_cash_balance()
-                if not balance_info:
-                    logger.error("Unable to get balance, skipping trade")
+            if side == "BUY":
+                # 1. Check user balance
+                if smart_simulation:
+                    user_balance = float(smart_profile.get("portfolio_amount", 0) or 0)
+                else:
+                    balance_info = self.check_cash_balance()
+                    if not balance_info:
+                        logger.error("Unable to get balance, skipping trade")
+                        return
+                    user_balance = float(balance_info.get('balance', 0))
+                
+                # 2. Calculate trade size
+                if smart_profile:
+                    suggested_size = apply_adaptive_profile(source_wallet, float(makerAmount), smart_profile)
+                else:
+                    max_risk_percent = getattr(Config, 'MAX_RISK_PER_TRADE', 0.05)
+                    suggested_size = min(
+                        user_balance * max_risk_percent,
+                        float(makerAmount),
+                        self.max_order
+                    )
+                
+                final_amount = max(self.min_order, suggested_size)
+                
+                # Check balance again
+                if not smart_simulation and user_balance < final_amount:
+                    logger.warning(f"Insufficient balance for BUY: {user_balance} < {final_amount}")
                     return
-                user_balance = float(balance_info.get('balance', 0))
-            
-            # 2. Calculate trade size. Smart simulated copy profiles override
-            # the generic 1-5% rule for their source wallet.
-            if smart_profile:
-                suggested_size = apply_adaptive_profile(source_wallet, float(makerAmount), smart_profile)
-                logger.info(
-                    "Smart Copy profile applied for %s: leader=%s copied=%s limit=%s",
-                    source_wallet,
-                    makerAmount,
-                    suggested_size,
-                    smart_profile.get("single_trade_limit"),
-                )
-            else:
-                max_risk_percent = 0.05  # 5% max per trade
-                suggested_size = min(
-                    user_balance * max_risk_percent,
-                    float(makerAmount),
-                    self.max_order
-                )
-            if smart_profile:
-                if suggested_size <= 0:
-                    logger.warning("Smart Copy amount is zero, skipping trade")
+
+            else: # SELL
+                # 1. Check current position
+                position_shares = get_target_position_size(self.wallet_address, token_id)
+                if position_shares <= 0:
+                    logger.info(f"No position to sell for {token_id}, skipping")
                     return
-                makerAmount = Decimal(str(suggested_size))
-            else:
-                makerAmount = Decimal(str(max(self.min_order, suggested_size)))
-            
-            # 3. Check slippage (Smart Copy "Any Price" skips this filter)
-            slippage = getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01)
-            if not smart_profile and slippage > 0.02:
-                logger.warning(f"Slippage too high ({slippage*100:.1f}%), skipping trade")
-                return
+                
+                # 2. Calculate sell size
+                # For SELL, makerAmount from leader is shares.
+                # If leader sells X shares, we try to sell X shares, capped by our position.
+                if smart_profile:
+                    # Scaling for smart profiles might be different, but for now we cap to position
+                    suggested_size = apply_adaptive_profile(source_wallet, float(makerAmount), smart_profile)
+                else:
+                    # Simple mirror: try to sell what leader sold, but cap to our position
+                    suggested_size = float(makerAmount)
+                
+                final_amount = min(suggested_size, position_shares)
+                if final_amount <= 0:
+                    return
+
+            # 3. Check slippage
+            slippage_tolerance = getattr(Config, 'SLIPPAGE_TOLERANCE', 0.02)
+            # (Note: Slippage check is advisory here, clob-client handles actual execution)
             
             # 4. Check liquidity (minimum required)
             # TODO: Add liquidity check via Polymarket API
@@ -268,7 +266,7 @@ class PolymarketTrader:
             # TODO: Add price movement check
             
             # 7. Simulate trade first (dry run)
-            logger.info(f"🧪 Simulating trade: {side} {makerAmount} USDC for {token_id}")
+            logger.info(f"🧪 Simulating trade: {side} {final_amount} {'USDC' if side == 'BUY' else 'shares'} for {token_id}")
             if self.simulation or smart_simulation:
                 logger.info("Simulation mode active; not posting live order")
                 self.send_telegram_notification(
@@ -277,7 +275,7 @@ class PolymarketTrader:
                     f"Profil smart: `{smart_profile.get('name') if smart_profile else 'standard'}`\n"
                     f"Token: `{str(token_id)[:8]}...{str(token_id)[-6:]}`\n"
                     f"Side: {side}\n"
-                    f"Amount: {makerAmount} USDC\n"
+                    f"Amount: {final_amount} {'USDC' if side == 'BUY' else 'shares'}\n"
                     "Status: Dry-run, aucun ordre live envoyé"
                 )
                 jsonl_log_trade(
@@ -285,9 +283,9 @@ class PolymarketTrader:
                     market=token_id,
                     token_id=token_id,
                     side=side,
-                    size=float(makerAmount),
+                    size=float(final_amount),
                     price=0.0,
-                    slippage=getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01),
+                    slippage=slippage_tolerance,
                     success=True,
                     pnl=0.0
                 )
@@ -296,7 +294,7 @@ class PolymarketTrader:
                     "source_wallet": source_wallet,
                     "token_id": token_id,
                     "side": side,
-                    "amount": float(makerAmount),
+                    "amount": float(final_amount),
                     "smart_profile": smart_profile.get("name") if smart_profile else None,
                 }
             
@@ -311,18 +309,18 @@ class PolymarketTrader:
             order_response = await self.place_order(
                 token_id=token_id,
                 direction=side,
-                amount=float(makerAmount)
+                amount=float(final_amount)
             )
             
             # Send Telegram notification to all chat IDs
             if order_response:
-                side_emoji = "BUY" if side == SIDE_BUY else "SELL"
+                side_emoji = "🔵 BUY" if side == SIDE_BUY else "🟠 SELL"
                 notify_msg = (
                     f"{side_emoji} *Trade Copied!*\n\n"
                     f"Wallet source: `{source_wallet}`\n"
                     f"Token: `{token_id[:8]}...{token_id[-6:]}`\n"
                     f"Side: {side}\n"
-                    f"Amount: {makerAmount} USDC\n"
+                    f"Amount: {final_amount} {'USDC' if side == 'BUY' else 'shares'}\n"
                     f"Status: Success"
                 )
                 self.send_telegram_notification(notify_msg)
@@ -337,9 +335,9 @@ class PolymarketTrader:
                     market=token_id,
                     token_id=token_id,
                     side=side,
-                    size=float(makerAmount),
+                    size=float(final_amount),
                     price=0.0,  # Price not available from order response directly
-                    slippage=getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01),
+                    slippage=slippage_tolerance,
                     success=True,
                     pnl=0.0
                 )

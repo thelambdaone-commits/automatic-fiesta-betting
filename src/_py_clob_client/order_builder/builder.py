@@ -182,9 +182,6 @@ class OrderBuilder:
             order_args.price,
             ROUNDING_CONFIG[options.tick_size],
         )
-        print(f"maker_amount: {maker_amount}, taker_amount: {taker_amount}")
-        exit()
-
         data = OrderData(
             maker=self.funder,
             taker=order_args.taker,

@@ -75,7 +75,8 @@ class Config:
     # Trading parameters
     MIN_ORDER_SIZE = _get_float(SESSION_CONFIG, "min_order_size", "MIN_ORDER_SIZE", 10)
     MAX_ORDER_SIZE = _get_float(SESSION_CONFIG, "max_order_size", "MAX_ORDER_SIZE", 1000)
-    SLIPPAGE_TOLERANCE = _get_float(SESSION_CONFIG, "slippage_tolerance", "SLIPPAGE_TOLERANCE", 0.01)
+    SLIPPAGE_TOLERANCE = _get_float(SESSION_CONFIG, "slippage_tolerance", "SLIPPAGE_TOLERANCE", 0.02)
+    MAX_RISK_PER_TRADE = _get_float(SESSION_CONFIG, "max_risk_per_trade", "MAX_RISK_PER_TRADE", 0.05)
     FOLLOW_DELAY = _get_float(SESSION_CONFIG, "follow_delay", "FOLLOW_DELAY", 1)
     
     # Test mode

@@ -144,6 +144,7 @@ class CopyBettingKeyboardMixin:
         # Action row
         rows.append([
             {"text": "🔄 Refresh", "callback_data": "history_refresh"},
+            {"text": "⬅️ Retour", "callback_data": "menu:mes_wallets"},
             {"text": "🏠 Accueil", "callback_data": "menu"},
         ])
         

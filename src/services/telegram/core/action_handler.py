@@ -321,7 +321,7 @@ class ActionHandler(
     def _mes_wallets_text(self) -> str:
         return "\n".join(
             [
-                "🎯 *Cibles Mirroring*",
+                "🎯 *Mes Mirroirs (Cibles)*",
                 "",
                 self._active_wallet_line(),
                 "",
@@ -332,7 +332,7 @@ class ActionHandler(
     def _wallet_selection_text(self) -> str:
         wallets = self._configured_wallets()
         lines = [
-            "🎯 *Wallets suivis (Mirror)*",
+            "🎯 *Mes Mirroirs*",
             "",
             self._active_wallet_line(),
             "",

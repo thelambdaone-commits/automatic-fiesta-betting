@@ -28,8 +28,8 @@ class WalletsKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🎯 Voir les cibles", "callback_data": "wallet_mirror"},
-                    {"text": "➕ Ajouter une cible", "callback_data": "mirror_add_prompt"},
+                    {"text": "🎯 Voir les mirroirs", "callback_data": "wallet_mirror"},
+                    {"text": "➕ Ajouter un mirroir", "callback_data": "mirror_add_prompt"},
                 ],
                 [
                     {"text": "🔍 Chercher un wallet", "callback_data": "wallet_search"},
@@ -39,7 +39,7 @@ class WalletsKeyboardMixin:
                     {"text": "📜 Mon historique", "callback_data": "trade_history"},
                 ],
                 [
-                    {"text": "📲 Changer de cible active", "callback_data": "user_wallet_select"},
+                    {"text": "📲 Changer de mirroir actif", "callback_data": "user_wallet_select"},
                 ],
                 [
                     {"text": "⬅️ Retour", "callback_data": "menu"},
@@ -60,8 +60,8 @@ class WalletsKeyboardMixin:
         rows.extend(
             [
                 [
-                    {"text": "➕ Ajouter un wallet", "callback_data": "mirror_add_prompt"},
-                    {"text": "⬅️ Mes wallets", "callback_data": "menu:mes_wallets"},
+                    {"text": "➕ Ajouter un mirroir", "callback_data": "mirror_add_prompt"},
+                    {"text": "⬅️ Mirroirs", "callback_data": "menu:mes_wallets"},
                 ],
                 [
                     {"text": "❌ Fermer", "callback_data": "close_menu"},

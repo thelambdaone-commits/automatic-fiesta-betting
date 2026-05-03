@@ -42,7 +42,7 @@ class ActionHandler(
     def callbacks(self):
         """Lazy load callback handler."""
         if self._callbacks is None:
-            from .callbacks import CallbackHandler
+            from ..callbacks import CallbackHandler
             self._callbacks = CallbackHandler()
         return self._callbacks
     

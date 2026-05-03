@@ -28,6 +28,10 @@ Thumbs.db
 config/session/*
 config/targets/*
 data/output/*
+data/*.json
+data/*.jsonl
+src/data/*.jsonl
+src/data/*.json
 !config/session/.gitkeep
 !config/targets/.gitkeep
 !data/output/.gitkeep
@@ -35,3 +39,8 @@ data/output/*
 # Bytecode
 src/**/__pycache__/
 src/**/*.pyc
+
+# Backup and temp files
+*.bak
+*.tmp
+.pytest_cache/

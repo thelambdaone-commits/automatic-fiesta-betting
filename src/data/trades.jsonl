@@ -1,2 +1,0 @@
-{"wallet": "0xTest", "market": "Test Market", "token_id": "0xToken", "side": "BUY", "size": 10.0, "price": 0.5, "slippage": 0.01, "success": true, "pnl": 5.0, "_ts": 1777464434.1385326, "_iso": "2026-04-29T12:07:14.138536+00:00"}
-{"wallet": "0xTest", "market": "Test Market", "token_id": "0xToken", "side": "BUY", "size": 10.0, "price": 0.5, "slippage": 0.01, "success": true, "pnl": 5.0, "_ts": 1777464511.8393626, "_iso": "2026-04-29T12:08:31.839371+00:00"}

@@ -21,7 +21,7 @@ from _py_clob_client.constants import POLYGON
 
 # JSONL logger
 from services.jsonl_logger import log_trade as jsonl_log_trade
-from services.smart_copy import apply_profile_to_amount, apply_adaptive_profile, get_profile
+from services.smart_copy import apply_profile_to_amount, apply_adaptive_profile, get_profile, update_simulated_trade
 
 # Initialize configuration
 Config.validate()
@@ -232,7 +232,12 @@ class PolymarketTrader:
 
             else: # SELL
                 # 1. Check current position
-                position_shares = get_target_position_size(self.wallet_address, token_id)
+                if smart_simulation:
+                    sim_positions = smart_profile.get("simulated_positions") or {}
+                    position_shares = float(sim_positions.get(token_id, 0))
+                else:
+                    position_shares = get_target_position_size(self.wallet_address, token_id)
+                
                 if position_shares <= 0:
                     logger.info(f"No position to sell for {token_id}, skipping")
                     return
@@ -278,25 +283,28 @@ class PolymarketTrader:
                     f"Amount: {final_amount} {'USDC' if side == 'BUY' else 'shares'}\n"
                     "Status: Dry-run, aucun ordre live envoyé"
                 )
+                # Log simulated trade
                 jsonl_log_trade(
                     wallet=source_wallet,
                     market=token_id,
+                    side=side,
+                    outcome=trade_data.get("outcome", "unknown"),
+                    size=final_amount,
+                    price=float(trade_data.get("price", 0.5)),
+                    simulation=True,
+                    success=True
+                )
+                
+                # Update simulated persistence
+                update_simulated_trade(
+                    wallet=source_wallet,
                     token_id=token_id,
                     side=side,
-                    size=float(final_amount),
-                    price=0.0,
-                    slippage=slippage_tolerance,
-                    success=True,
-                    pnl=0.0
+                    amount=final_amount,
+                    price=float(trade_data.get("price", 0.5))
                 )
-                return {
-                    "status": "simulated",
-                    "source_wallet": source_wallet,
-                    "token_id": token_id,
-                    "side": side,
-                    "amount": float(final_amount),
-                    "smart_profile": smart_profile.get("name") if smart_profile else None,
-                }
+                
+                return {"simulated": True, "success": True}
             
             # 8. Place the market order
             # SECURITY: Double-check simulation mode before live order

@@ -26,6 +26,7 @@ class SmartCopyProfile:
     simulation: bool = True
     enabled: bool = True
     ai_summary: str = ""
+    simulated_positions: Dict[str, float] = None # tokenId -> shares
 
 
 def _to_float(value, default: float = 0.0) -> float:
@@ -93,6 +94,7 @@ def build_smart_copy_profile(
         single_trade_limit=round(limit, 2),
         simulation=simulation,
         ai_summary=summary,
+        simulated_positions={}
     )
 
 
@@ -105,12 +107,45 @@ def load_profiles(path: Path = SMART_COPY_FILE) -> Dict[str, Dict]:
     return profiles if isinstance(profiles, dict) else {}
 
 
-def save_profile(profile: SmartCopyProfile, path: Path = SMART_COPY_FILE) -> None:
+def save_profile(profile: SmartCopyProfile | Dict, path: Path = SMART_COPY_FILE) -> None:
     profiles = load_profiles(path)
-    profiles[profile.wallet.lower()] = asdict(profile)
+    data = asdict(profile) if isinstance(profile, SmartCopyProfile) else profile
+    profiles[data.get("wallet", "").lower()] = data
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump({"profiles": profiles}, file, indent=2)
+
+def update_simulated_trade(wallet: str, token_id: str, side: str, amount: float, price: float = 0.5) -> None:
+    """Update simulated balance and positions for a profile."""
+    profiles = load_profiles()
+    p = profiles.get(wallet.lower())
+    if not p:
+        return
+    
+    balance = float(p.get("portfolio_amount", 0))
+    positions = p.get("simulated_positions") or {}
+    
+    if side == "BUY":
+        # Buying shares with USDC
+        cost = amount # amount is USDC for BUY
+        # Estimate shares (approximate if price not known, assume 0.5 if not provided)
+        shares = amount / price if price > 0 else amount * 2
+        
+        p["portfolio_amount"] = max(0.0, balance - cost)
+        positions[token_id] = positions.get(token_id, 0) + shares
+    else:
+        # Selling shares for USDC
+        # amount is shares for SELL
+        shares_to_sell = min(amount, positions.get(token_id, 0))
+        gain = shares_to_sell * price
+        
+        p["portfolio_amount"] = balance + gain
+        positions[token_id] = max(0.0, positions.get(token_id, 0) - shares_to_sell)
+        if positions[token_id] == 0:
+            del positions[token_id]
+            
+    p["simulated_positions"] = positions
+    save_profile(p)
 
 
 def get_profile(wallet: str, path: Path = SMART_COPY_FILE) -> Optional[Dict]:
@@ -222,6 +257,7 @@ def format_profiles_dashboard(profiles: Dict[str, Dict]) -> str:
                 f"  Cible copiée: `{target}`",
                 f"  Portfolio simulé: `${float(profile.get('portfolio_amount', 0) or 0):.2f}`",
                 f"  Plafond/trade: `${float(profile.get('single_trade_limit', 10) or 10):.2f}`",
+                f"  Positions simulées: `{len(profile.get('simulated_positions', {}) or {})}`",
                 f"  Type cible IA: `{profile.get('wallet_type') or 'unknown'}`",
                 "  Règles: `100% leader`, `No Filter`, `Any Price`, `TP/SL off`",
                 "",

@@ -1,0 +1,9 @@
+{
+  "mode": "simulation",
+  "max_trade_usdc": 10.0,
+  "slippage": "any",
+  "risk_level": "safe",
+  "default_wallet": "0x47a83fb1debcd11cc93f3bbbf5aeb3a5caeb52f9",
+  "simulation": true,
+  "live_trading": false
+}

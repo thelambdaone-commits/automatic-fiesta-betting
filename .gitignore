@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime files
+logs/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project data
+config/session/*
+config/targets/*
+data/output/*
+!config/session/.gitkeep
+!config/targets/.gitkeep
+!data/output/.gitkeep
+
+# Bytecode
+src/**/__pycache__/
+src/**/*.pyc

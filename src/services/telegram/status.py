@@ -301,6 +301,32 @@ class TelegramStatusMixin:
         
         return "\n".join(lines)
 
+    def _mirrors_performance_text(self) -> str:
+        """Analyze performance of all followed wallets."""
+        from services.jsonl_logger import get_wallets_performance
+        
+        perf = get_wallets_performance()
+        if not perf:
+            return "❌ Aucun historique de trade disponible pour analyse."
+            
+        lines = ["*📊 Analyse de Rentabilité (Mirroirs)*\n"]
+        
+        # Sort by PnL desc
+        sorted_wallets = sorted(perf.items(), key=lambda x: x[1]['pnl'], reverse=True)
+        
+        for wallet, stats in sorted_wallets[:10]:
+            pnl = stats['pnl']
+            emoji = "✅" if pnl > 0 else "❌"
+            recommendation = "💎 Très intéressant" if pnl > 50 else "👍 Intéressant" if pnl > 0 else "⚠️ À surveiller" if pnl > -50 else "🚫 Pas rentable"
+            
+            lines.append(f"{emoji} `{wallet[:10]}...` ({stats['trades']} trades)")
+            lines.append(f"  • PnL: *{pnl:+.2f} USDC*")
+            lines.append(f"  • Win rate: {stats['success_rate']:.1f}%")
+            lines.append(f"  • Avis: *{recommendation}*")
+            lines.append("")
+            
+        return "\n".join(lines)
+
     def _errors_text(self, limit: int = 10) -> str:
         """Show last errors from log files."""
         lines = ["*⚠️ Erreurs Récentes*\n"]

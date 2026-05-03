@@ -208,6 +208,8 @@ class ActionHandler(
             wallet = self._active_wallet()
             if not wallet: return "⚠️ Aucun wallet actif.", self.mes_wallets_keyboard()
             return self._handle_wallet_positions(wallet), history_keyboard(page=0, total_pages=1)
+        if action == "performance_mirrors":
+            return self._mirrors_performance_text(), self.keyboard()
         if action == "history_next":
             page = getattr(self, '_history_page', 0) + 1
             self._history_page = page

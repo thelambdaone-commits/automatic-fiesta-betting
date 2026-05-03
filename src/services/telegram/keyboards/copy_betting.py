@@ -45,6 +45,9 @@ class CopyBettingKeyboardMixin:
                 ],
                 [
                     {"text": "🗑️ Supprimer", "callback_data": "mirror_remove_menu"},
+                    {"text": "📈 Analyse IA", "callback_data": "performance_mirrors"},
+                ],
+                [
                     {"text": "🏠 Accueil", "callback_data": "menu"},
                 ],
             ]

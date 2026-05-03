@@ -150,3 +150,33 @@ def get_wallet_streak(wallet: str, limit: int = 50) -> Dict:
         "loss_streak": loss_streak,
         "last_10_pnl": last_10_pnl
     }
+def get_wallets_performance() -> Dict[str, Dict]:
+    """
+    Aggregate performance metrics for each followed wallet.
+    Returns: {wallet_address: {pnl, volume, trades, success_rate, is_profitable}}
+    """
+    trades = read_records("trades")
+    perf = {}
+    
+    for t in trades:
+        w = t.get("wallet", "unknown").lower()
+        if w not in perf:
+            perf[w] = {"pnl": 0.0, "volume": 0.0, "trades": 0, "success": 0}
+            
+        pnl = float(t.get("pnl", 0) or 0)
+        size = float(t.get("size", 0) or 0)
+        success = 1 if t.get("success") or pnl > 0 else 0
+        
+        perf[w]["pnl"] += pnl
+        perf[w]["volume"] += size
+        perf[w]["trades"] += 1
+        perf[w]["success"] += success
+        
+    # Calculate derived stats
+    for w in perf:
+        p = perf[w]
+        p["success_rate"] = (p["success"] / p["trades"] * 100) if p["trades"] > 0 else 0
+        p["is_profitable"] = p["pnl"] > 0
+        p["score"] = (p["pnl"] * 0.7) + (p["success_rate"] * 0.3) # Simple ranking score
+        
+    return perf

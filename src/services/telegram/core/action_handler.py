@@ -57,7 +57,12 @@ class ActionHandler(
         if action == "menu":
             return self.home_text(), self.keyboard()
         if action == "menu:copy_trading":
-            return "🔗 *Copy Betting*\n\nChoisis une action :", self.copy_trading_keyboard()
+            return (
+                "🔗 *CopyBet*\n\n"
+                "Ici tu gères les wallets que tu copies et les stratégies Smart Copy IA.\n\n"
+                "Tes wallets personnels sont séparés dans `Mes wallets`.",
+                self.copy_trading_keyboard(),
+            )
         if action == "menu:mes_wallets":
             return self._mes_wallets_text(), self.mes_wallets_keyboard()
         if action == "menu:decouvrir":
@@ -65,7 +70,11 @@ class ActionHandler(
         if action == "menu:parametres":
             return self._settings_menu(), self.parametres_keyboard()
         if action == "my_wallet_full":
-            return self._my_wallet_full(), self.keyboard()
+            return self._my_wallet_full(), self.my_wallet_keyboard()
+        if action == "wallet_create_prompt":
+            return self._wallet_create_prompt(), self.wallet_create_confirm_keyboard()
+        if action == "wallet_create_confirm":
+            return self._wallet_create_confirm(), self.my_wallet_keyboard()
         
         # Handle specific actions
         if action.startswith("menu:"):
@@ -170,7 +179,7 @@ class ActionHandler(
             return self._select_wallet(action.split(":", 1)[1]), self.mes_wallets_keyboard()
         if action in {"mirror_add_prompt", "copy_pairs"}:
             if action == "copy_pairs":
-                return self._copytrade_pairs_text(), self.mirror_keyboard()
+                return self._copytrade_pairs_text(), self.copy_pairs_keyboard()
             return self._mirror_add_prompt(), self.mirror_keyboard()
         if action == "mirror_remove_menu":
             return self._mirror_remove_menu_text(), self.mirror_remove_keyboard()
@@ -254,9 +263,17 @@ class ActionHandler(
             return self._ia_analysis_text(), self.decouvrir_keyboard()
 
         if action == "smartcopy_ai_menu":
-            return self._smartcopy_menu_text(), self.smartcopy_ai_menu_keyboard()
+            return self._smartcopy_ai_menu(), self.smartcopy_ai_menu_keyboard()
         if action == "smartcopy_create":
             return self._smart_copy_prompt(), self.smartcopy_mode_keyboard()
+        if action == "smartcopy_mode_sim":
+            return self._smartcopy_set_mode("simulation"), self.smartcopy_input_keyboard()
+        if action == "smartcopy_mode_live":
+            return self._smartcopy_set_mode("live"), self.smartcopy_mode_keyboard()
+        if action == "smartcopy_execute":
+            return self._smartcopy_execute(), self.smartcopy_dashboard_keyboard()
+        if action == "smartcopy_cancel":
+            return self._smartcopy_cancel(), self.smartcopy_ai_menu_keyboard()
         if action == "smart_copy_dashboard":
             return self._smart_copy_dashboard(), self.smartcopy_dashboard_keyboard()
         if action == "simulate_trade":
@@ -323,18 +340,20 @@ class ActionHandler(
     def _mes_wallets_text(self) -> str:
         return "\n".join(
             [
-                "🎯 *Mes Mirroirs (Cibles)*",
+                "🎯 *CopyBet - wallets copiés*",
                 "",
                 self._active_wallet_line(),
                 "",
-                "Gérer les wallets que vous copiez automatiquement.",
+                "Gère uniquement les wallets Polymarket que le bot surveille et copie.",
+                "",
+                "Pour ton signer/proxy personnel, utilise `Mes wallets` depuis l'accueil.",
             ]
         )
 
     def _wallet_selection_text(self) -> str:
         wallets = self._configured_wallets()
         lines = [
-            "🎯 *Mes Mirroirs*",
+            "🎯 *CopyBet - wallets copiés*",
             "",
             self._active_wallet_line(),
             "",
@@ -352,7 +371,7 @@ class ActionHandler(
         if not any(wallet.lower() == configured.lower() for configured in wallets):
             return "\n".join(
                 [
-                    "👛 *Mes Wallets*",
+                    "🎯 *CopyBet - wallets copiés*",
                     "",
                     "⚠️ Wallet introuvable dans la liste configurée.",
                     "",
@@ -364,7 +383,7 @@ class ActionHandler(
         self._save_settings()
         return "\n".join(
             [
-                "👛 *Mes Wallets*",
+                "🎯 *CopyBet - wallet actif*",
                 "",
                 f"⭐ Wallet actif : `{self._short_wallet(wallet)}`",
             ]
@@ -538,7 +557,9 @@ class ActionHandler(
             return self.wallet_selection_keyboard()
         if action.startswith("select_wallet:"):
             return self.mes_wallets_keyboard()
-        if action in {"mirror_add_prompt", "copy_pairs"}:
+        if action == "copy_pairs":
+            return self.copy_pairs_keyboard()
+        if action == "mirror_add_prompt":
             return self.mirror_keyboard()
         if action in {"manual_trade", "manual_buy_prompt", "manual_sell_prompt", "check_balance"}:
             return self.manual_trade_keyboard()
@@ -670,28 +691,62 @@ class ActionHandler(
             return f"⚠️ Erreur lors de la récupération des ordres pour `{short}`."
     
     def _handle_wallet_positions(self, wallet_address: str) -> str:
-        """Handle wallet positions display."""
+        """Handle wallet positions display with source wallet info."""
         short = f"{wallet_address[:6]}...{wallet_address[-3:]}" if len(wallet_address) >= 12 else wallet_address
         try:
             from services.wallet_scanner.client import WalletScannerClient
+            from services.jsonl_logger import get_source_wallet_for_token
+
             client = WalletScannerClient()
-            # Try to get positions from CLOB API
-            positions = client.fetch_wallet_data("positions", {"maker": wallet_address, "limit": 10})
-            
-            if not positions:
+            positions = client.fetch_data_api("positions", {"user": wallet_address, "limit": 10})
+            closed_positions = client.fetch_data_api("closed-positions", {"user": wallet_address, "limit": 50})
+
+            if not positions and not closed_positions:
                 return (
                     f"💼 *Positions du Wallet {short}*\n\n"
                     "⚠️ Aucune position trouvée pour ce wallet.\n"
                     "Le wallet est peut-être vide ou les données ne sont pas publiques."
                 )
-            
+
             lines = [f"💼 *Positions du Wallet {short}*", ""]
+            realized_pnl = sum(float(pos.get("realizedPnl", pos.get("cashPnl", pos.get("pnl", 0))) or 0) for pos in closed_positions)
+            pnl_icon = "🟢" if realized_pnl >= 0 else "🔴"
+            lines.append(f"Ouvertes: `{len(positions)}` | Clôturées: `{len(closed_positions)}`")
+            lines.append(f"{pnl_icon} PnL réalisé estimé: `${realized_pnl:+.2f}`")
+            lines.append("")
+
+            if not positions:
+                lines.append("Aucune position ouverte actuellement.")
+                return "\n".join(lines)
+
+            lines.append("*Positions ouvertes*")
             for pos in positions[:10]:
-                token = pos.get("token_id", "")[:8] + "..."
-                size = float(pos.get("size", 0))
-                avg_price = float(pos.get("average_price", 0))
-                lines.append(f"• {size} @ ${avg_price:.3f} ({token})")
-            
+                market = (
+                    pos.get("title")
+                    or pos.get("marketTitle")
+                    or pos.get("question")
+                    or pos.get("eventTitle")
+                    or "Marché Polymarket"
+                )
+                outcome = pos.get("outcome") or pos.get("outcomeName") or pos.get("asset") or "Position"
+                size = float(pos.get("size", pos.get("shares", 0)) or 0)
+                avg_price = float(pos.get("avgPrice", pos.get("averagePrice", pos.get("price", 0))) or 0)
+                current_value = float(pos.get("currentValue", pos.get("value", 0)) or 0)
+                pnl = float(pos.get("cashPnl", pos.get("realizedPnl", pos.get("pnl", 0))) or 0)
+                pnl_icon = "🟢" if pnl >= 0 else "🔴"
+                token_id = pos.get("token_id") or pos.get("tokenId") or ""
+                market_short = str(market)
+                if len(market_short) > 72:
+                    market_short = market_short[:69] + "..."
+
+                # Find source wallet for this position
+                source_wallet = get_source_wallet_for_token(token_id, wallet_address) if token_id else ""
+                source_info = f" | Source: `{self._short_wallet(source_wallet)}`" if source_wallet else ""
+
+                lines.append(f"• *{outcome}* - {market_short}{source_info}")
+                lines.append(f"  Taille: `{size:.2f}` | Prix moyen: `${avg_price:.3f}`")
+                lines.append(f"  Valeur: `${current_value:.2f}` | {pnl_icon} PnL: `${pnl:+.2f}`")
+
             return "\n".join(lines)
         except Exception as e:
             logger.warning("Failed to fetch positions: %s", e)

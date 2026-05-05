@@ -13,18 +13,41 @@ def _p(profile, key, default=None):
 class TelegramCopySmartMixin:
     """Smart Copy related methods."""
 
+    def _detect_my_wallet_for_profile(self, provided_wallet: str = "") -> tuple[str, str]:
+        provided_wallet = (provided_wallet or "").strip()
+        if provided_wallet:
+            return provided_wallet, "manuel"
+
+        try:
+            from services.polymarket_wallet_manager import active_wallet_summary
+
+            summary = active_wallet_summary()
+            proxy = summary.get("proxy_wallet") or ""
+            signer = summary.get("signer_address") or ""
+            if proxy:
+                status = summary.get("proxy_status") or "auto"
+                return proxy, f"proxy Polymarket {status}"
+            if signer:
+                return signer, "signer auto"
+        except Exception as e:
+            logger.debug("Smart Copy wallet detection failed: %s", e)
+
+        return "", "non détecté"
+
     def _smart_copy_prompt(self) -> str:
         return (
-            "🦞 *Smart Copy simulé IA*\n"
-            "*Smart Copy IA — Simulation*\n\n"
-            "Crée un profil de copy-trading intelligent en mode 100 % simulé.\n"
+            "🦞 *Smart Copy IA*\n"
+            "*CopyBet IA — Simulation sécurisée*\n\n"
+            "Crée une stratégie qui copie un wallet cible avec sizing IA, en mode 100 % simulé.\n"
             "Aucune transaction réelle n'est envoyée on-chain.\n\n"
             "Commande :\n"
             "`/smartcopy <nom> <wallet_cible> <portfolio_usdc> [mon_wallet]`\n\n"
+            "• `wallet_cible` = wallet Polymarket à copier.\n"
+            "• `mon_wallet` = ton proxy/signer Polymarket; optionnel, détecté automatiquement.\n\n"
             "Exemples :\n"
-            "`/smartcopy alpha 0x9495425feeb0c250accb89275c97587011b19a27 250`\n"
-            "`/smartcopy alpha 0xCible... 250 0xMonWallet...`\n\n"
-            "Le bot associe ton wallet personnel au wallet cible copié, puis applique automatiquement les meilleurs réglages selon ton capital simulé.\n\n"
+            "`/smartcopy alpha @surfandturf 250`\n"
+            "`/smartcopy alpha 0xCible... 250 0xMonProxy...`\n\n"
+            "Le bot associe ton wallet personnel au wallet cible copié, ajoute la cible au monitoring, puis applique les réglages IA selon ton capital simulé.\n\n"
             "⚙️ Réglages IA automatiques\n"
             "• Mode : Pourcentage\n"
             "• Bet Size: 100% of leader's amount\n"
@@ -33,7 +56,7 @@ class TelegramCopySmartMixin:
             "• Filtre de prix : aucun\n"
             "• Slippage : tous les prix\n"
             "• TP/SL automatique : désactivé\n"
-            "• Exécution : Simulation uniquement"
+            "• Exécution : Simulation forcée"
         )
 
     def _smart_copy_dashboard(self) -> str:
@@ -54,12 +77,22 @@ class TelegramCopySmartMixin:
                 "Exemple: `/smartcopy alpha 0x9495425feeb0c250accb89275c97587011b19a27 250`"
             )
 
-        _, name, address, portfolio_text = parts
+        _, name, address, portfolio_text = parts[:4]
         provided_my_wallet = parts[4] if len(parts) == 5 else ""
         try:
             portfolio_amount = float(portfolio_text)
         except ValueError:
             return "Montant portfolio invalide. Exemple: `/smartcopy alpha <wallet> 250`"
+
+        try:
+            from services.polymarket_profile import resolve_polymarket_profile
+
+            target_input = address
+            address = resolve_polymarket_profile(address)
+            if provided_my_wallet:
+                provided_my_wallet = resolve_polymarket_profile(provided_my_wallet)
+        except Exception as e:
+            return f"Profil/wallet cible invalide: `{e}`"
 
         my_wallet, detection = self._detect_my_wallet_for_profile(provided_my_wallet)
         if not my_wallet:
@@ -69,9 +102,10 @@ class TelegramCopySmartMixin:
             )
 
         try:
+            from services.polymarket_wallet_manager import restart_copy_trade_process
             from services.smart_copy import add_profile, load_profiles
 
-            add_profile(
+            profile = add_profile(
                 name=name,
                 wallet=address,
                 assigned_wallet=my_wallet,
@@ -79,17 +113,26 @@ class TelegramCopySmartMixin:
                 simulation=True,
             )
             profiles = load_profiles()
-            profile = profiles.get(name)
+            profile = profiles.get(address.lower()) or profile
             if profile:
+                restart = restart_copy_trade_process()
+                restart_line = (
+                    f"Copy-trade redémarré: PID `{restart.get('pid')}`"
+                    if restart.get("ok")
+                    else f"Copy-trade à vérifier: {restart.get('error') or 'statut inconnu'}"
+                )
                 return (
-                    f"✅ *Profil Smart Copy ajouté*\n\n"
+                    f"✅ *Stratégie CopyBet IA ajoutée*\n\n"
                     f"Nom: `{profile.get('name')}`\n"
-                    f"Mon wallet: `{profile.get('assigned_wallet')}` (détecté: {detection})\n"
-                    f"Wallet cible: `{profile.get('wallet')}`\n"
+                    f"Mon wallet: `{profile.get('assigned_wallet')}`\n"
+                    f"Détection: `{detection}`\n"
+                    f"Wallet copié: `{profile.get('wallet')}`\n"
+                    f"Source demandée: `{target_input}`\n"
                     f"Portfolio: `${float(profile.get('portfolio_amount', 0) or 0):.2f}` USDC\n"
                     f"Max/trade: `${float(profile.get('single_trade_limit', 10) or 10):.2f}` USDC\n\n"
-                    f"Mode: Simulation par défaut.\n"
-                    f"Modifier: `/smartcopy <nom> <wallet_cible> <portfolio> [mon_wallet]`"
+                    "Mode: `Simulation forcée`\n"
+                    f"{restart_line}\n\n"
+                    "Voir: `CopyBet` → `Smart Copy IA` → `Profils IA`"
                 )
             return "Profil créé, mais impossible de le recharger."
         except Exception as e:
@@ -134,7 +177,7 @@ class TelegramCopySmartMixin:
         lines = [
             "🦞 *Smart Copy IA*",
             "",
-            "*Tes profils Smart Copy*",
+            "*Stratégies CopyBet IA*",
         ]
         if not profiles:
             lines.extend(
@@ -150,13 +193,13 @@ class TelegramCopySmartMixin:
                 target = _p(profile, "wallet") or "n/a"
                 my_wallet = _p(profile, "assigned_wallet") or "auto"
                 portfolio = float(_p(profile, "portfolio_amount", 0) or 0)
-                simulation = _p(profile, "simulation", True)
-                status = "Simulation" if simulation else "RÉEL"
+                enabled = _p(profile, "enabled", True)
+                status = "Simulation active" if enabled else "Pause"
                 lines.extend(
                     [
                         f"• *{name}*",
                         f"  Mon wallet: `{my_wallet}`",
-                        f"  Cible: `{target}`",
+                        f"  Wallet copié: `{target}`",
                         f"  Portfolio: `${portfolio:.2f}` USDC",
                         f"  Statut: {status}",
                         "",
@@ -166,8 +209,6 @@ class TelegramCopySmartMixin:
             [
                 "*Actions*",
                 "• Créer: `/smartcopy <nom> <wallet_cible> <portfolio>`",
-                "• Supprimer: `/smartcopy_delete <nom>`",
-                "• Toggle: `/smartcopy_toggle <nom>`",
                 "",
                 "Détails: `/smartcopy <nom> <wallet_cible> <portfolio> [mon_wallet]`",
             ]
@@ -178,22 +219,13 @@ class TelegramCopySmartMixin:
         return self._smart_copy_prompt()
 
     def _smartcopy_set_mode(self, mode: str) -> str:
-        valid_modes = ["percent", "fixed", "mirror"]
-        if mode not in valid_modes:
-            return f"Mode invalide. Modes disponibles: {', '.join(valid_modes)}"
-        try:
-            from services.smart_copy import load_profiles, save_profiles
-
-            profiles = load_profiles()
-            updated = 0
-            for profile in profiles.values():
-                profile["mode"] = mode
-                updated += 1
-            save_profiles(profiles)
-            return f"✅ Mode changé pour `{updated}` profil(s): `{mode}`"
-        except Exception as e:
-            logger.exception("Smart Copy set mode failed")
-            return f"Erreur lors du changement de mode: `{e}`"
+        if mode == "live":
+            return (
+                "🛡️ *Smart Copy IA sécurisé*\n\n"
+                "Le mode réel n'est pas activable depuis ce bouton. "
+                "Les stratégies IA restent en simulation forcée pour éviter un ordre live accidentel."
+            )
+        return self._smart_copy_prompt()
 
     def _smartcopy_choose_wallet(self) -> str:
         return (
@@ -229,8 +261,8 @@ class TelegramCopySmartMixin:
         if not profiles:
             return "Aucun profil Smart Copy actif. Crée-en un avec `/smartcopy ...`"
         lines = [
-            "🦞 *Exécution Smart Copy IA*\n",
-            "Analyse des marchés et des profils...\n",
+            "🦞 *Smart Copy IA actif*\n",
+            "Les stratégies ci-dessous sont surveillées par le process copy-trade.\n",
         ]
         for profile in profiles.values():
             name = _p(profile, "name") or "Sans nom"
@@ -254,13 +286,14 @@ class TelegramCopySmartMixin:
             updated = 0
             for profile in profiles.values():
                 if _p(profile, "wallet", "").lower() == wallet.lower():
-                    current = _p(profile, "simulation", True)
-                    profile["simulation"] = not current
+                    current = _p(profile, "enabled", True)
+                    profile["enabled"] = not current
+                    profile["simulation"] = True
                     updated += 1
             if updated == 0:
                 return f"Aucun profil trouvé pour le wallet: `{wallet}`"
             save_profiles(profiles)
-            return f"✅ `{updated}` profil(s) mis à jour (simulation toggle)."
+            return f"✅ `{updated}` stratégie(s) Smart Copy mise(s) à jour (actif/pause)."
         except Exception as e:
             logger.exception("Smart Copy toggle failed")
             return f"Erreur lors du toggle: `{e}`"

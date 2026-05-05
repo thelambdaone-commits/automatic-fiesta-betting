@@ -22,6 +22,23 @@ class MessageHandler:
                 chat_id=chat_id
             )
     
+    def handle_scan_message(self, text: str) -> str:
+        """Handle /scan command."""
+        parts = text.split()
+        if len(parts) < 2:
+            return "Usage: /scan <wallet_ou_@profil>"
+
+        target = parts[1].strip()
+        try:
+            from services.polymarket_profile import resolve_polymarket_profile
+
+            wallet = resolve_polymarket_profile(target)
+            prefix = f"Profil `{target}` résolu en `{wallet}`.\n\n" if target != wallet else ""
+            return prefix + self._scan_wallet_result(wallet)
+        except Exception as e:
+            logger.error("Scan message handling failed: %s", e)
+            return f"❌ Erreur lors de l'analyse: {e}"
+    
     def _handle_smartcopy_message(self, text: str) -> str:
         """Handle /smartcopy command."""
         try:
@@ -36,14 +53,18 @@ class MessageHandler:
         """Handle /mirror command."""
         parts = text.split()
         if len(parts) < 2:
-            return "Usage: /mirror <wallet_address>"
+            return "Usage: /mirror <wallet_ou_@profil>"
         
-        wallet = parts[1].strip()
+        target = parts[1].strip()
         try:
+            from services.polymarket_profile import resolve_polymarket_profile
             from services.telegram.copy_modules.mirror import TelegramCopyMirrorMixin
+
+            wallet = resolve_polymarket_profile(target)
             handler = TelegramCopyMirrorMixin()
             handler._save_wallet_mirror_target(wallet)
-            return f"✅ Wallet {wallet} ajouté aux cibles."
+            prefix = f"`{target}` → " if target != wallet else ""
+            return f"✅ Wallet {prefix}`{wallet}` ajouté aux cibles."
         except Exception as e:
             logger.error(f"Mirror message handling failed: {e}")
             return f"❌ Erreur lors de l'ajout du wallet: {e}"

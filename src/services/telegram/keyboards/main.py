@@ -16,13 +16,10 @@ class MainKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🔗 Copy Betting", "callback_data": "menu:copy_trading"},
+                    {"text": "🔗 CopyBet - wallets copiés", "callback_data": "menu:copy_trading"},
                 ],
                 [
-                    {"text": "🎯 Mirroirs", "callback_data": "menu:mes_wallets"},
-                ],
-                [
-                    {"text": "🧬 Wallets", "callback_data": "my_wallet_full"},
+                    {"text": "🧬 Mes wallets", "callback_data": "my_wallet_full"},
                 ],
                 [
                     {"text": "🧭 Découvrir", "callback_data": "menu:decouvrir"},

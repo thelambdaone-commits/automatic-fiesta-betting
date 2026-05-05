@@ -9,8 +9,10 @@ class TelegramActivityMixin:
         return (
             "*🔎 Scan Wallet*\n"
             "*Scanner Wallet*\n\n"
-            "Envoie `/scan <wallet>` avec n'importe quel wallet EVM ou wallet proxy Polymarket.\n\n"
-            "Exemple : `/scan 0xe8dd7741ccb12350957ec71e9ee332e0d1e6ec86`"
+            "Envoie `/scan <wallet>` ou `/scan @profil` avec n'importe quel wallet EVM ou profil Polymarket.\n\n"
+            "Exemples :\n"
+            "`/scan 0xe8dd7741ccb12350957ec71e9ee332e0d1e6ec86`\n"
+            "`/scan @surfandturf`"
         )
 
     def wallet_search_text(self) -> str:
@@ -18,7 +20,7 @@ class TelegramActivityMixin:
             "*🔍 Wallet Search*\n"
             "*Rechercher Wallet*\n\n"
             "Trouve des wallets à analyser, classer, scanner ou copier.\n"
-            "Utilise Top 1 %, Meilleurs wallets, Découvrir, ou envoie `/scan <wallet>` directement."
+            "Utilise Top 1 %, Meilleurs wallets, Découvrir, ou envoie `/scan <wallet>` ou `/scan @profil` directement."
         )
 
     def help_text(self) -> str:
@@ -27,9 +29,10 @@ class TelegramActivityMixin:
             "*Commandes principales:*\n"
             "• `/menu` - ouvrir l'accueil\n"
             "• `/top`, `/top20`, `/top50`, `/top themes` - top wallets\n"
-            "• `/scan <wallet>` - analyser un wallet\n"
-            "• `/mirror <wallet>` - ajouter une cible à copier\n"
-            "• `/smartcopy <nom> <wallet_cible> <portfolio_usdc> [mon_wallet]` - créer une paire Smart Copy simulée\n"
+            "• `/scan <wallet|@profil>` - analyser un wallet\n"
+            "• `/mirror <wallet|@profil>` - ajouter une cible à copier\n"
+            "• `/smartcopy <nom> <wallet|@profil> <portfolio_usdc> [mon_wallet]` - créer une paire Smart Copy simulée\n"
+            "• `/newwallet` - générer un nouveau signer ETH/POL pour Polymarket\n"
             "• `/bet BUY|SELL <token_id> <montant>` - pari manuel simulé\n"
             "• `/status` - vérifier la configuration\n\n"
             "*Rappels sécurité:*\n"
@@ -154,7 +157,7 @@ class TelegramActivityMixin:
         """Prompt to ask user for wallet address to scan"""
         return (
             "*🔍 Scanner un Wallet*\n\n"
-            "Envoie l'adresse du wallet à scanner.\n"
-            "Exemple: `0x9495425feeb0c250accb89275c97587011b19a27`\n\n"
+            "Envoie l'adresse du wallet ou le profil Polymarket à scanner.\n"
+            "Exemples: `0x9495425feeb0c250accb89275c97587011b19a27`, `@surfandturf`\n\n"
             "Ou utilisez /scan <wallet> directement."
         )

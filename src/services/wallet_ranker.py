@@ -225,6 +225,21 @@ class WalletRanker:
 
     def _fetch_wallet_theme(self, wallet: str) -> str:
         try:
+            from services.polymarket_analytics import get_wallet_details
+
+            details = get_wallet_details(wallet) or {}
+            rows = []
+            for key in ("positions", "activity", "trades"):
+                value = details.get(key)
+                if isinstance(value, list):
+                    rows.extend(value)
+            theme = self.infer_theme(rows)
+            if theme != "inconnu":
+                return theme
+        except Exception as exc:
+            logger.debug("Analytics theme fetch failed for %s: %s", wallet, exc)
+
+        try:
             from core.config import Config, get_proxies
         except Exception as e:
             logger.debug("Unable to load config for theme fetch: %s", e)

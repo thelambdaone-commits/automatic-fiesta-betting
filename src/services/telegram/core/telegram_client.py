@@ -190,6 +190,20 @@ class TelegramClient:
                 reply_markup=reply_markup,
                 chat_id=chat_id
             )
+        elif command.startswith("/scan"):
+            self.send_message(
+                self.handle_scan_message(command),
+                reply_markup=self.keyboard_for_action("scan_wallet"),
+                chat_id=chat_id,
+            )
+        elif command.startswith("/newwallet") or command.startswith("/wallet_new"):
+            text, reply_markup = self._split_response(
+                self.handle_action("wallet_create_prompt"),
+                default_keyboard=self.wallet_create_confirm_keyboard(),
+            )
+            self.send_message(text, reply_markup=reply_markup, chat_id=chat_id)
+        elif command.startswith("/mirror") or command.startswith("/smartcopy"):
+            self.handle_text(command, chat_id)
     
     def handle_callback(self, callback_query: Dict):
         """Handle callback query."""

@@ -197,7 +197,9 @@ class PolymarketTrader:
                 return
             side = self.normalize_side(side)
             smart_profile = get_profile(source_wallet)
-            smart_simulation = bool(smart_profile and smart_profile.get("simulation", True))
+            if smart_profile and not smart_profile.get("enabled", True):
+                smart_profile = None
+            smart_simulation = bool(smart_profile)
             
             # === RISK MANAGEMENT & SIZE CALCULATION ===
             
@@ -220,10 +222,10 @@ class PolymarketTrader:
                     suggested_size = min(
                         user_balance * max_risk_percent,
                         float(makerAmount),
-                        self.max_order
+                        getattr(self, "max_order", float(getattr(Config, "MAX_ORDER_SIZE", 1000)))
                     )
                 
-                final_amount = max(self.min_order, suggested_size)
+                final_amount = max(getattr(self, "min_order", 1.0), suggested_size)
                 
                 # Check balance again
                 if not smart_simulation and user_balance < final_amount:
@@ -287,12 +289,14 @@ class PolymarketTrader:
                 jsonl_log_trade(
                     wallet=source_wallet,
                     market=token_id,
+                    token_id=token_id,
                     side=side,
                     outcome=trade_data.get("outcome", "unknown"),
                     size=final_amount,
                     price=float(trade_data.get("price", 0.5)),
-                    simulation=True,
-                    success=True
+                    slippage=0.0,
+                    success=True,
+                    source_wallet=source_wallet
                 )
                 
                 # Update simulated persistence
@@ -304,7 +308,13 @@ class PolymarketTrader:
                     price=float(trade_data.get("price", 0.5))
                 )
                 
-                return {"simulated": True, "success": True}
+                return {
+                    "status": "simulated",
+                    "simulated": True,
+                    "success": True,
+                    "amount": final_amount,
+                    "smart_profile": smart_profile.get("name") if smart_profile else None,
+                }
             
             # 8. Place the market order
             # SECURITY: Double-check simulation mode before live order
@@ -347,7 +357,8 @@ class PolymarketTrader:
                     price=0.0,  # Price not available from order response directly
                     slippage=slippage_tolerance,
                     success=True,
-                    pnl=0.0
+                    pnl=0.0,
+                    source_wallet=source_wallet
                 )
             
             logger.info(f"✅ Market order placed successfully: {order_response}")

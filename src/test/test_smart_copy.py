@@ -8,6 +8,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(ROOT_DIR, "src"))
 
 from services.smart_copy import (
+    add_profile,
     apply_profile_to_amount,
     build_smart_copy_profile,
     format_profiles_dashboard,
@@ -61,6 +62,21 @@ class SmartCopyTest(unittest.TestCase):
 
         self.assertEqual(loaded["name"], "alpha")
         self.assertEqual(loaded["wallet"], profile.wallet)
+
+    def test_add_profile_returns_and_saves_by_target_wallet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profiles.json"
+            profile = add_profile(
+                name="alpha",
+                wallet="0x1111111111111111111111111111111111111111",
+                assigned_wallet="0x2222222222222222222222222222222222222222",
+                portfolio_amount=250,
+                path=path,
+            )
+            loaded = get_profile(profile["wallet"].upper(), path=path)
+
+        self.assertEqual(profile["name"], "alpha")
+        self.assertEqual(loaded["assigned_wallet"], "0x2222222222222222222222222222222222222222")
 
     def test_dashboard_shows_assigned_wallet_mapping(self):
         profiles = {

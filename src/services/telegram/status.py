@@ -309,7 +309,7 @@ class TelegramStatusMixin:
         if not perf:
             return "❌ Aucun historique de trade disponible pour analyse."
             
-        lines = ["*📊 Analyse de Rentabilité (Mirroirs)*\n"]
+        lines = ["*📊 Analyse de Rentabilité (CopyBet)*\n"]
         
         # Sort by PnL desc
         sorted_wallets = sorted(perf.items(), key=lambda x: x[1]['pnl'], reverse=True)

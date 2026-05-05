@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -65,7 +66,7 @@ class WalletMonitor:
         
         # Load contract ABI
         try:
-            abi_path = os.path.join(os.path.dirname(__file__), '..', 'abi', 'NegRiskFeeModule.json')
+            abi_path = Path(__file__).resolve().parents[2] / 'abi' / 'NegRiskFeeModule.json'
             logger.info("Loading ABI from: %s", abi_path)
             
             with open(abi_path, 'r') as f:

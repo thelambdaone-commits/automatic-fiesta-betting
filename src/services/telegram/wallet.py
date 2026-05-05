@@ -54,7 +54,7 @@ class TelegramWalletMixin:
         except Exception as e:
             errors.append(f"solde Polymarket non récupéré: {e}")
 
-        lines = ["*🧬 Mon Wallet*", ""]
+        lines = ["*🧬 Mes wallets*", ""]
 
         lines.extend(
             [
@@ -102,6 +102,85 @@ class TelegramWalletMixin:
             lines.append("_Infos partielles: certains soldes peuvent être indisponibles si RPC/API répond mal._")
 
         return "\n".join(lines)
+
+    def my_wallet_keyboard(self) -> dict:
+        return {
+            "inline_keyboard": [
+                [
+                    {"text": "🆕 Nouveau wallet", "callback_data": "wallet_create_prompt"},
+                    {"text": "🔄 Actualiser", "callback_data": "my_wallet_full"},
+                ],
+                [
+                    {"text": "🔗 CopyBet", "callback_data": "menu:copy_trading"},
+                    {"text": "🏠 Accueil", "callback_data": "menu"},
+                ],
+            ]
+        }
+
+    def _wallet_create_prompt(self) -> str:
+        return (
+            "*🆕 Nouveau wallet Polymarket*\n\n"
+            "Cette action va générer un nouveau *Wallet signer ETH/POL*, dériver ses credentials CLOB, "
+            "puis l'activer dans `config/session/default.json`.\n\n"
+            "*Ce que tu obtiens:*\n"
+            "• 🔐 Signer ETH/POL: nouvelle clé privée locale pour signer les ordres et payer le gas.\n"
+            "• 🏛️ Proxy Polymarket: détecté si Polymarket l'expose déjà; sinon le signer est utilisé en mode EOA au départ.\n\n"
+            "Le bot sauvegarde l'ancienne session puis redémarre le copy-trade pour charger le nouveau wallet."
+        )
+
+    @staticmethod
+    def wallet_create_confirm_keyboard() -> dict:
+        return {
+            "inline_keyboard": [
+                [{"text": "✅ Créer + activer", "callback_data": "wallet_create_confirm"}],
+                [{"text": "⬅️ Annuler", "callback_data": "my_wallet_full"}],
+            ]
+        }
+
+    def _wallet_create_confirm(self) -> str:
+        try:
+            from services.polymarket_wallet_manager import (
+                create_and_activate_wallet,
+                restart_copy_trade_process,
+                short_address,
+            )
+
+            result = create_and_activate_wallet()
+            restart = restart_copy_trade_process()
+            signer = result["signer_address"]
+            proxy = result["proxy_wallet"]
+            proxy_status = result["proxy_status"]
+            backup = result.get("backup_path") or "aucune"
+            restart_text = (
+                f"Copy-trade redémarré: PID `{restart.get('pid')}`"
+                if restart.get("ok")
+                else f"Copy-trade à vérifier: {restart.get('error') or 'statut inconnu'}"
+            )
+            same_wallet = signer.lower() == proxy.lower()
+            proxy_line = (
+                "Proxy non encore distinct détecté: mode EOA actif."
+                if same_wallet or proxy_status == "not_detected"
+                else f"Proxy détecté: `{proxy}`"
+            )
+
+            return (
+                "✅ *Nouveau wallet actif*\n\n"
+                "*🔐 Wallet signer ETH/POL*\n"
+                f"`{signer}`\n"
+                f"Polygonscan: https://polygonscan.com/address/{signer}\n\n"
+                "*🏛️ Wallet proxy Polymarket*\n"
+                f"`{proxy}`\n"
+                f"{proxy_line}\n"
+                f"Polymarket: https://polymarket.com/profile/{proxy}\n\n"
+                "*Credentials CLOB*\n"
+                f"API Key: `{short_address(result.get('api_key'))}`\n"
+                "Secret/passphrase: enregistrés dans la session.\n\n"
+                f"Sauvegarde ancienne session: `{backup}`\n\n"
+                f"{restart_text}"
+            )
+        except Exception as e:
+            logger.exception("Wallet creation failed")
+            return f"❌ Création du wallet impossible: `{e}`"
     
     def _check_balance(self) -> str:
         try:

@@ -210,7 +210,9 @@ class PolymarketTrader:
                 return
             side = self.normalize_side(side)
             smart_profile = get_profile(source_wallet)
-            smart_simulation = bool(smart_profile and smart_profile.get("simulation", True))
+            if smart_profile and not smart_profile.get("enabled", True):
+                smart_profile = None
+            smart_simulation = bool(smart_profile)
             
             # === RISK MANAGEMENT CHECKS ===
             

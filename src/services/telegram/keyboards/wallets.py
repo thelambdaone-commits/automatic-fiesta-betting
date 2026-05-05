@@ -15,24 +15,21 @@ class WalletsKeyboardMixin:
     """Wallets related keyboards."""
     
     def mes_wallets_keyboard(self) -> Dict:
-        """Mes wallets submenu."""
+        """CopyBet followed wallets submenu."""
         active_wallet = self._active_wallet() if hasattr(self, "_active_wallet") else ""
         has_active = bool(active_wallet)
-        
-        # Dynamic trade button based on active wallet
-        if has_active:
-            trade_btn = {"text": "🎲 Pari manuel", "callback_data": "manual_trade"}
-        else:
-            trade_btn = {"text": "🎲 Sélectionner un wallet", "callback_data": "user_wallet_select"}
         
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🎯 Voir les mirroirs", "callback_data": "wallet_mirror"},
-                    {"text": "➕ Ajouter un mirroir", "callback_data": "mirror_add_prompt"},
+                    {"text": "🎯 Wallets copiés", "callback_data": "wallet_mirror"},
+                    {"text": "➕ Ajouter wallet copié", "callback_data": "mirror_add_prompt"},
                 ],
                 [
-                    {"text": "🧬 Mes Wallets", "callback_data": "my_wallet_full"},
+                    {"text": "🦞 Smart Copy IA", "callback_data": "smartcopy_ai_menu"},
+                    {"text": "🔗 Paires CopyBet", "callback_data": "copy_pairs"},
+                ],
+                [
                     {"text": "🔍 Chercher un wallet", "callback_data": "wallet_search"},
                 ],
                 [
@@ -40,7 +37,7 @@ class WalletsKeyboardMixin:
                     {"text": "🎲 Pari manuel", "callback_data": "manual_trade"},
                 ],
                 [
-                    {"text": "📲 Changer de mirroir actif", "callback_data": "user_wallet_select"},
+                    {"text": "📲 Wallet copié actif", "callback_data": "user_wallet_select"},
                 ],
                 [
                     {"text": "⬅️ Retour", "callback_data": "menu"},
@@ -61,8 +58,8 @@ class WalletsKeyboardMixin:
         rows.extend(
             [
                 [
-                    {"text": "➕ Ajouter un mirroir", "callback_data": "mirror_add_prompt"},
-                    {"text": "⬅️ Mirroirs", "callback_data": "menu:mes_wallets"},
+                    {"text": "➕ Ajouter wallet copié", "callback_data": "mirror_add_prompt"},
+                    {"text": "⬅️ CopyBet", "callback_data": "menu:mes_wallets"},
                 ],
                 [
                     {"text": "❌ Fermer", "callback_data": "close_menu"},

@@ -13,7 +13,10 @@ class CopyBettingKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "📊 Mes stratégies", "callback_data": "menu:copy_strategies"},
+                    {"text": "🎯 Wallets copiés", "callback_data": "menu:mes_wallets"},
+                    {"text": "📊 Stratégies", "callback_data": "menu:copy_strategies"},
+                ],
+                [
                     {"text": "➕ Ajouter stratégie", "callback_data": "menu:copy_add"},
                 ],
                 [
@@ -59,7 +62,7 @@ class CopyBettingKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "➕ Créer un copytrade", "callback_data": "smartcopy_create"},
+                    {"text": "➕ Créer stratégie IA", "callback_data": "smartcopy_create"},
                 ],
                 [
                     {"text": "📊 Profils IA", "callback_data": "smart_copy_dashboard"},
@@ -77,8 +80,7 @@ class CopyBettingKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🧪 Simulation", "callback_data": "smartcopy_mode_sim"},
-                    {"text": "🔴 Mode : RÉEL", "callback_data": "smartcopy_mode_live"},
+                    {"text": "🛡️ Simulation forcée", "callback_data": "smartcopy_mode_sim"},
                 ],
                 [
                     {"text": "⬅️ Retour", "callback_data": "smartcopy_ai_menu"},
@@ -92,8 +94,7 @@ class CopyBettingKeyboardMixin:
         return {
             "inline_keyboard": [
                 [
-                    {"text": "🧪 Simulation", "callback_data": "smartcopy_mode_sim"},
-                    {"text": "🔴 Mode : RÉEL", "callback_data": "smartcopy_mode_live"},
+                    {"text": "🛡️ Simulation forcée", "callback_data": "smartcopy_mode_sim"},
                 ],
                 [
                     {"text": "⬅️ Retour", "callback_data": "smartcopy_ai_menu"},

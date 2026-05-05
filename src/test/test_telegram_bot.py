@@ -255,9 +255,38 @@ class TelegramControlBotTest(unittest.TestCase):
         bot = object.__new__(TelegramControlBot)
         text = bot.handle_action("smart_copy_prompt")
 
-        self.assertIn("Smart Copy simulé IA", text)
+        self.assertIn("Smart Copy", text)
         self.assertIn("/smartcopy <nom> <wallet_cible> <portfolio_usdc> [mon_wallet]", text)
         self.assertIn("Trade Size: 100% of leader's amount", text)
+
+    def test_smartcopy_command_creates_strategy_and_restarts_copytrade(self):
+        from services.telegram.copy_modules.smart import TelegramCopySmartMixin
+
+        target = "0x1111111111111111111111111111111111111111"
+        assigned = "0x2222222222222222222222222222222222222222"
+        profile = {
+            "name": "alpha",
+            "wallet": target,
+            "assigned_wallet": assigned,
+            "portfolio_amount": 250,
+            "single_trade_limit": 10,
+        }
+
+        with patch("services.smart_copy.add_profile", return_value=profile), patch(
+            "services.smart_copy.load_profiles",
+            return_value={target.lower(): profile},
+        ), patch(
+            "services.polymarket_wallet_manager.restart_copy_trade_process",
+            return_value={"ok": True, "pid": 12345},
+        ):
+            text = TelegramCopySmartMixin().handle_smartcopy_message(
+                f"/smartcopy alpha {target} 250 {assigned}"
+            )
+
+        self.assertIn("Stratégie CopyBet IA ajoutée", text)
+        self.assertIn(target, text)
+        self.assertIn(assigned, text)
+        self.assertIn("Copy-trade redémarré", text)
 
     def test_simulation_text_lists_saved_smart_copy_mapping(self):
         bot = object.__new__(TelegramControlBot)
@@ -363,6 +392,42 @@ class TelegramControlBotTest(unittest.TestCase):
         self.assertIn("$10.00", text)
         self.assertIn("ON ✅ forcée", text)
         self.assertIn("Trade Size 100% du leader", text)
+
+    def test_wallet_create_prompt_and_confirmation_keyboard(self):
+        bot = object.__new__(TelegramControlBot)
+
+        result = bot.handle_action("wallet_create_prompt")
+        text = result[0] if isinstance(result, tuple) else result
+        keyboard = result[1] if isinstance(result, tuple) else bot.keyboard_for_action("wallet_create_prompt")
+        callbacks = [button["callback_data"] for row in keyboard["inline_keyboard"] for button in row]
+
+        self.assertIn("Nouveau wallet Polymarket", text)
+        self.assertIn("Wallet signer ETH/POL", text)
+        self.assertIn("Wallet proxy Polymarket", text)
+        self.assertIn("wallet_create_confirm", callbacks)
+
+    def test_wallet_create_confirm_formats_created_wallet(self):
+        bot = object.__new__(TelegramControlBot)
+        fake_result = {
+            "signer_address": "0x1111111111111111111111111111111111111111",
+            "proxy_wallet": "0x1111111111111111111111111111111111111111",
+            "proxy_status": "not_detected",
+            "api_key": "ded3794c-8794-46f1-0b16-db2b60aae0e4",
+            "backup_path": "/tmp/default.backup.json",
+        }
+
+        with patch("services.polymarket_wallet_manager.create_and_activate_wallet", return_value=fake_result), patch(
+            "services.polymarket_wallet_manager.restart_copy_trade_process",
+            return_value={"ok": True, "pid": 12345, "log_path": "/tmp/copy_trade_runtime.out"},
+        ):
+            text = bot.handle_action("wallet_create_confirm")
+            if isinstance(text, tuple):
+                text = text[0]
+
+        self.assertIn("Nouveau wallet actif", text)
+        self.assertIn(fake_result["signer_address"], text)
+        self.assertIn("mode EOA actif", text)
+        self.assertIn("Copy-trade redémarré", text)
 
 
 if __name__ == "__main__":

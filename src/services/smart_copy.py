@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -7,6 +8,7 @@ from core.config import Config
 
 
 SMART_COPY_FILE = Config.CONFIG_DIR / "targets" / "smart_copy_profiles.json"
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -107,13 +109,39 @@ def load_profiles(path: Path = SMART_COPY_FILE) -> Dict[str, Dict]:
     return profiles if isinstance(profiles, dict) else {}
 
 
+def save_profiles(profiles: Dict[str, Dict], path: Path = SMART_COPY_FILE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump({"profiles": profiles or {}}, file, indent=2)
+
+
 def save_profile(profile: SmartCopyProfile | Dict, path: Path = SMART_COPY_FILE) -> None:
     profiles = load_profiles(path)
     data = asdict(profile) if isinstance(profile, SmartCopyProfile) else profile
     profiles[data.get("wallet", "").lower()] = data
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump({"profiles": profiles}, file, indent=2)
+    save_profiles(profiles, path=path)
+
+
+def add_profile(
+    name: str,
+    wallet: str,
+    assigned_wallet: str = "",
+    portfolio_amount: float = 0.0,
+    simulation: bool = True,
+    scan_result: Optional[Dict] = None,
+    path: Path = SMART_COPY_FILE,
+) -> Dict:
+    profile = build_smart_copy_profile(
+        name=name,
+        wallet=wallet,
+        portfolio_amount=portfolio_amount,
+        scan_result=scan_result,
+        assigned_wallet=assigned_wallet,
+        assigned_wallet_label="manuel" if assigned_wallet else "auto",
+        simulation=simulation,
+    )
+    save_profile(profile, path=path)
+    return asdict(profile)
 
 def update_simulated_trade(wallet: str, token_id: str, side: str, amount: float, price: float = 0.5) -> None:
     """Update simulated balance and positions for a profile."""
@@ -192,7 +220,12 @@ def apply_adaptive_profile(wallet: str, leader_amount: float, profile: Optional[
     if win_streak > 0:
         multiplier = min(1.5, 1.0 + (win_streak * 0.1))
         logger.info(f"Adaptive Copy: win_streak={win_streak}, multiplier={multiplier}")
-        return amount * multiplier
+        limit = _to_float(profile.get("single_trade_limit"), 10.0)
+        portfolio = _to_float(profile.get("portfolio_amount"))
+        caps = [limit]
+        if portfolio > 0:
+            caps.append(portfolio)
+        return min(amount * multiplier, *caps)
     
     # Loss streak: réduire jusqu'à -50%
     if loss_streak > 0:

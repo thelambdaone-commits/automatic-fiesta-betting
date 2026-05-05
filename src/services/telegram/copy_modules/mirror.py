@@ -1,3 +1,5 @@
+import json
+
 from core.config import Config
 from services.telegram.base import logger
 
@@ -11,6 +13,72 @@ def _p(profile, key, default=None):
 
 class TelegramCopyMirrorMixin:
     """Mirror wallet copy trading methods."""
+    @staticmethod
+    def _short_wallet(wallet: str) -> str:
+        wallet = str(wallet or "")
+        return f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) >= 12 else wallet or "n/a"
+
+    @staticmethod
+    def _profile_limit(profile) -> float:
+        return float(_p(profile, "single_trade_limit", 10) or 10)
+
+    @staticmethod
+    def _profile_portfolio(profile) -> float:
+        return float(_p(profile, "portfolio_amount", 0) or 0)
+
+    def _copy_pair_action_hint(self, wallet: str) -> str:
+        short = self._short_wallet(wallet)
+        return f"  Voir : Historique / Positions / Ordres / Scan via les boutons `{short}`"
+
+    def copy_pairs_keyboard(self) -> dict:
+        """Wallet-centric controls for the copy pairs dashboard."""
+        wallets = []
+        for wallet in Config.TARGET_WALLETS or []:
+            if wallet and wallet.lower() not in {item.lower() for item in wallets}:
+                wallets.append(wallet)
+
+        try:
+            from services.smart_copy import load_profiles
+
+            profiles = load_profiles()
+        except Exception as e:
+            logger.debug("Unable to load Smart Copy profiles for pair keyboard: %s", e)
+            profiles = {}
+
+        for profile in profiles.values():
+            wallet = str(_p(profile, "wallet") or "").strip()
+            if wallet and wallet.lower() not in {item.lower() for item in wallets}:
+                wallets.append(wallet)
+
+        rows = []
+        for wallet in wallets[:6]:
+            short = self._short_wallet(wallet)
+            rows.append(
+                [
+                    {"text": f"📜 {short}", "callback_data": f"trades_{wallet}"},
+                    {"text": "💼 Positions", "callback_data": f"positions_{wallet}"},
+                ]
+            )
+            rows.append(
+                [
+                    {"text": "📋 Ordres", "callback_data": f"orders_{wallet}"},
+                    {"text": "🔍 Scan", "callback_data": f"scan_{wallet}"},
+                ]
+            )
+
+        rows.extend(
+            [
+                [
+                    {"text": "➕ Ajouter wallet", "callback_data": "mirror_add_prompt"},
+                    {"text": "📊 Profils", "callback_data": "smart_copy_dashboard"},
+                ],
+                [
+                    {"text": "🔄 Actualiser", "callback_data": "copy_pairs"},
+                    {"text": "🏠 Accueil", "callback_data": "menu"},
+                ],
+            ]
+        )
+        return {"inline_keyboard": rows}
 
     def _wallet_mirror_status(self) -> str:
         wallets = Config.TARGET_WALLETS or []
@@ -51,7 +119,7 @@ class TelegramCopyMirrorMixin:
         lines.append("✅ Copytrading: **ACTIF**" if wallets else "❌ Copytrading: **INACTIF**")
         lines.append(f"Mode exécution: **{mode}**")
         lines.append("")
-        lines.append("Commandes: `/scan <wallet>`, `/mirror <wallet>`, `/smartcopy <nom> <wallet_cible> <portfolio> [mon_wallet]`.")
+        lines.append("Commandes: `/scan <wallet|@profil>`, `/mirror <wallet|@profil>`, `/smartcopy <nom> <wallet|@profil> <portfolio> [mon_wallet]`.")
         return "\n".join(lines)
 
     @staticmethod
@@ -62,6 +130,43 @@ class TelegramCopyMirrorMixin:
             return Account.from_key(Config.PRIVATE_KEY).address if Config.PRIVATE_KEY else ""
         except Exception:
             return ""
+
+    def _get_wallet_balance(self, wallet_address: str) -> float:
+        """Fetch USDC balance for a wallet."""
+        try:
+            from services.copy_trade import PolymarketTrader
+            trader = PolymarketTrader(mode="test")
+            balance_info = trader.check_cash_balance()
+            if balance_info:
+                return float(balance_info.get("balance", 0) or 0)
+        except Exception as e:
+            logger.debug("Balance check failed for %s: %s", wallet_address, e)
+        return 0.0
+
+    def _calculate_total_allocated(self, target_wallet: str, profiles: dict) -> float:
+        """Calculate total budget allocated to a target wallet across all profiles."""
+        total = 0.0
+        target_lower = target_wallet.lower()
+        signer = self._configured_signer_wallet()
+
+        for profile in profiles.values():
+            assigned = str(_p(profile, "assigned_wallet") or signer).lower()
+            if assigned == target_lower:
+                total += self._profile_portfolio(profile)
+
+        return total
+
+    def _check_budget_alert(self, target_wallet: str, profiles: dict) -> str:
+        """Return warning message if allocated budget exceeds wallet balance."""
+        balance = self._get_wallet_balance(target_wallet)
+        if balance <= 0:
+            return ""
+
+        allocated = self._calculate_total_allocated(target_wallet, profiles)
+        if allocated > balance:
+            over = allocated - balance
+            return f"  ⚠️ **ALERTE** : Budget alloué (`{allocated:.2f}`) > Solde (`{balance:.2f}`) | Dépassement: `{over:.2f}` USDC"
+        return ""
 
     def _copytrade_pairs_text(self) -> str:
         wallets = Config.TARGET_WALLETS or []
@@ -79,6 +184,12 @@ class TelegramCopyMirrorMixin:
             if _p(profile, "wallet")
         }
         signer_wallet = self._configured_signer_wallet()
+
+        # Grouper les profils par wallet cible (assigned_wallet)
+        profiles_by_target = {}
+        for profile in profiles.values():
+            target = str(_p(profile, "assigned_wallet") or signer_wallet or "auto").lower()
+            profiles_by_target.setdefault(target, []).append(profile)
 
         simulation_profiles = []
         live_profiles = []
@@ -102,34 +213,47 @@ class TelegramCopyMirrorMixin:
             )
             return "\n".join(lines)
 
-        lines.append("🧪 *Mode SIMULATION*")
-        lines.append("")
+        # Fonction helper pour afficher un groupe par wallet cible
+        def _format_target_group(target_wallet: str, profs: list, mode_label: str) -> list:
+            result = []
+            total_budget = sum(self._profile_portfolio(p) for p in profs)
+            short_target = self._short_wallet(target_wallet)
+            result.append(f"")
+            result.append(f"💼 *Mon wallet : `{target_wallet}` ({short_target})*")
+            result.append(f"   Budget total alloué : `{total_budget:.2f}` USDC | Mode : `{mode_label}`")
+            result.append(f"   Sources copiées : `{len(profs)}`")
 
-        sim_count = 0
-        displayed_profiles = set()
-        for profile in simulation_profiles:
-            target_wallet = _p(profile, "wallet") or "n/a"
-            displayed_profiles.add(target_wallet.lower())
-            my_wallet = _p(profile, "assigned_wallet") or signer_wallet or "auto"
-            name = _p(profile, "name") or "Smart Copy"
-            wallet_type = _p(profile, "wallet_type") or "Smart Copy"
-            portfolio = float(_p(profile, "portfolio_amount", 0) or 0)
-            limit = float(_p(profile, "single_trade_limit", 10) or 10)
-            lines.extend(
-                [
-                    "🦞 *Smart Copy IA*",
-                    f"• {name}",
-                    f"  Cible : `{target_wallet}`",
-                    f"  Mon wallet : `{my_wallet}`",
-                    f"  Type : `{wallet_type}`",
-                    f"  Portfolio : `{portfolio:.2f}` USDC",
-                    f"  Max/trade : `{limit:.2f}` USDC",
-                    f"  Mode : Pourcentage — 100 %",
-                    "  Statut : Simulation",
-                    "",
-                ]
-            )
-            sim_count += 1
+            # Vérifier alerte budget
+            alert = self._check_budget_alert(target_wallet, profiles)
+            if alert:
+                result.append(alert)
+
+            for profile in profs:
+                source_wallet = _p(profile, "wallet") or "n/a"
+                name = _p(profile, "name") or "Smart Copy"
+                wallet_type = _p(profile, "wallet_type") or "Smart Copy"
+                portfolio = self._profile_portfolio(profile)
+                limit = self._profile_limit(profile)
+                result.extend(
+                    [
+                        f"",
+                        f"  📌 *{name}*",
+                        f"     Source : `{source_wallet}` ({self._short_wallet(source_wallet)})",
+                        f"     Type : `{wallet_type}` | Budget : `{portfolio:.2f}` USDC | Max/paris : `{limit:.2f}` USDC",
+                        self._copy_pair_action_hint(source_wallet),
+                        f"     • Polymarket: https://polymarket.com/profile/{source_wallet}",
+                        f"     • Polyanalytics: https://polyanalytics.com/address/{source_wallet}",
+                    ]
+                )
+            return result
+
+        lines.append("🧪 *Mode SIMULATION*")
+        sim_by_target = {}
+        for p in simulation_profiles:
+            t = str(_p(p, "assigned_wallet") or signer_wallet or "auto").lower()
+            sim_by_target.setdefault(t, []).append(p)
+        for target, profs in sim_by_target.items():
+            lines.extend(_format_target_group(target, profs, "Simulation"))
 
         if Config.SIMULATION_MODE or not Config.LIVE_TRADING:
             for target_wallet in wallets:
@@ -137,48 +261,28 @@ class TelegramCopyMirrorMixin:
                     my_wallet = signer_wallet or "Wallet principal configuré"
                     lines.extend(
                         [
-                            "• *Wallet Mirror*",
-                            f"  Mon wallet: `{my_wallet}`",
-                            f"  Wallet cible: `{target_wallet}`",
-                            "  Type : `Wallet Mirror standard`",
-                            f"  Max/trade : `${float(getattr(Config, 'MAX_ORDER_SIZE', 1000)):.2f}` | slippage `{float(getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01)) * 100:.1f}%`",
-                            "  Statut : Simulation",
                             "",
+                            f"💼 *Mon wallet : `{my_wallet}`*",
+                            f"🪞 *Wallet Mirror standard*",
+                            f"  Cible : `{target_wallet}` ({self._short_wallet(target_wallet)})",
+                            f"  Statut : `Simulation`",
+                            f"  Max/paris : `${float(getattr(Config, 'MAX_ORDER_SIZE', 1000)):.2f}` | Slippage : `{float(getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01)) * 100:.1f}%`",
+                            self._copy_pair_action_hint(target_wallet),
+                            "",
+                            "  Liens :",
+                            f"  • Polymarket: https://polymarket.com/profile/{target_wallet}",
+                            f"  • Polyanalytics: https://polyanalytics.com/address/{target_wallet}",
                         ]
                     )
-                    sim_count += 1
 
-        if sim_count == 0:
-            lines.append("Aucun profil en mode simulation.")
-            lines.append("")
-
-        lines.append("🔴 *Mode RÉEL*")
         lines.append("")
-
-        live_count = 0
-        for profile in live_profiles:
-            target_wallet = _p(profile, "wallet") or "n/a"
-            displayed_profiles.add(target_wallet.lower())
-            my_wallet = _p(profile, "assigned_wallet") or signer_wallet or "auto"
-            name = _p(profile, "name") or "Smart Copy"
-            wallet_type = _p(profile, "wallet_type") or "Smart Copy"
-            portfolio = float(_p(profile, "portfolio_amount", 0) or 0)
-            limit = float(_p(profile, "single_trade_limit", 10) or 10)
-            lines.extend(
-                [
-                    "🦞 *Smart Copy IA*",
-                    f"• {name}",
-                    f"  Cible : `{target_wallet}`",
-                    f"  Mon wallet : `{my_wallet}`",
-                    f"  Type : `{wallet_type}`",
-                    f"  Portfolio : `{portfolio:.2f}` USDC",
-                    f"  Max/trade : `{limit:.2f}` USDC",
-                    f"  Mode : Pourcentage — 100 %",
-                    "  Statut : RÉEL",
-                    "",
-                ]
-            )
-            live_count += 1
+        lines.append("🔴 *Mode RÉEL*")
+        live_by_target = {}
+        for p in live_profiles:
+            t = str(_p(p, "assigned_wallet") or signer_wallet or "auto").lower()
+            live_by_target.setdefault(t, []).append(p)
+        for target, profs in live_by_target.items():
+            lines.extend(_format_target_group(target, profs, "RÉEL"))
 
         if not Config.SIMULATION_MODE and Config.LIVE_TRADING:
             for target_wallet in wallets:
@@ -186,20 +290,15 @@ class TelegramCopyMirrorMixin:
                     my_wallet = signer_wallet or "Wallet principal configuré"
                     lines.extend(
                         [
-                            "• *Wallet Mirror*",
-                            f"  Mon wallet: `{my_wallet}`",
-                            f"  Wallet cible: `{target_wallet}`",
-                            "  Type : `Wallet Mirror standard`",
-                            f"  Max/trade : `${float(getattr(Config, 'MAX_ORDER_SIZE', 1000)):.2f}` | slippage `{float(getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01)) * 100:.1f}%`",
-                            "  Statut : RÉEL",
                             "",
+                            f"💼 *Mon wallet : `{my_wallet}`*",
+                            f"🪞 *Wallet Mirror standard*",
+                            f"  Cible : `{target_wallet}` ({self._short_wallet(target_wallet)})",
+                            "  Statut : `RÉEL`",
+                            f"  Max/trade : `${float(getattr(Config, 'MAX_ORDER_SIZE', 1000)):.2f}` | slippage `{float(getattr(Config, 'SLIPPAGE_TOLERANCE', 0.01)) * 100:.1f}%`",
+                            self._copy_pair_action_hint(target_wallet),
                         ]
                     )
-                    live_count += 1
-
-        if live_count == 0:
-            lines.append("Aucun profil en mode RÉEL.")
-            lines.append("")
 
         seen_all = set()
         for w in wallets:
@@ -208,9 +307,10 @@ class TelegramCopyMirrorMixin:
             profile
             for profile in profiles.values()
             if (str(_p(profile, "wallet") or "").lower() not in seen_all)
-            and (str(_p(profile, "wallet") or "").lower() not in displayed_profiles)
+            and (str(_p(profile, "wallet") or "").lower() not in profiles_by_wallet)
         ]
         if orphan_profiles:
+            lines.append("")
             lines.append("*Profils Smart Copy non actifs dans Wallet Mirror:*")
             for profile in orphan_profiles:
                 target_wallet = _p(profile, "wallet") or "n/a"
@@ -218,6 +318,12 @@ class TelegramCopyMirrorMixin:
                 status = "Simulation" if _p(profile, "simulation", True) else "RÉEL"
                 lines.append(f"- `{my_wallet}` → `{target_wallet}` ({_p(profile, 'name') or 'Smart Copy'}, {status})")
 
+        lines.append("")
+        lines.append("*Actions disponibles*")
+        lines.append("• Historique : derniers paris publics du wallet cible.")
+        lines.append("• Positions : positions ouvertes détectées sur Polymarket.")
+        lines.append("• Ordres : ordres ouverts lorsque l'API les expose.")
+        lines.append("")
         lines.append("Modifier: `/smartcopy <nom> <wallet_cible> <portfolio_usdc> [mon_wallet]` ou `/mirror <wallet>`.")
         return "\n".join(lines)
 
@@ -225,7 +331,7 @@ class TelegramCopyMirrorMixin:
         return (
             "*➕ Ajouter un wallet à copier*\n\n"
             "Envoie:\n"
-            "`/mirror <wallet>`\n\n"
+            "`/mirror <wallet>` ou `/mirror @profil`\n\n"
             "Le bot va scanner le wallet, l'ajouter aux cibles, puis le monitor suivra toutes les cibles configurées."
         )
 

@@ -19,6 +19,7 @@ ENV/
 
 # Runtime files
 logs/*.log
+logs/*.out
 
 # OS
 .DS_Store
@@ -27,6 +28,7 @@ Thumbs.db
 # Project data
 config/session/*
 config/targets/*
+config/wallets/*
 data/output/*
 data/*.json
 data/*.jsonl
@@ -34,6 +36,7 @@ src/data/*.jsonl
 src/data/*.json
 !config/session/.gitkeep
 !config/targets/.gitkeep
+!config/wallets/.gitkeep
 !data/output/.gitkeep
 
 # Bytecode

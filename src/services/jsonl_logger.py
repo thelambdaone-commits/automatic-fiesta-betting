@@ -45,8 +45,8 @@ def read_records(name: str, limit: Optional[int] = None) -> List[Dict]:
 
 
 def log_trade(wallet: str, market: str, token_id: str, side: str,
-              size: float, price: float, slippage: float, success: bool,
-              pnl: float = 0.0):
+               size: float, price: float, slippage: float, success: bool,
+               pnl: float = 0.0, source_wallet: str = "", **kwargs):
     append_record("trades", {
         "wallet": wallet,
         "market": market,
@@ -57,6 +57,7 @@ def log_trade(wallet: str, market: str, token_id: str, side: str,
         "slippage": slippage,
         "success": success,
         "pnl": pnl,
+        "source_wallet": source_wallet or wallet,
     })
 
 
@@ -157,26 +158,67 @@ def get_wallets_performance() -> Dict[str, Dict]:
     """
     trades = read_records("trades")
     perf = {}
-    
+
     for t in trades:
         w = t.get("wallet", "unknown").lower()
         if w not in perf:
             perf[w] = {"pnl": 0.0, "volume": 0.0, "trades": 0, "success": 0}
-            
+
         pnl = float(t.get("pnl", 0) or 0)
         size = float(t.get("size", 0) or 0)
         success = 1 if t.get("success") or pnl > 0 else 0
-        
+
         perf[w]["pnl"] += pnl
         perf[w]["volume"] += size
         perf[w]["trades"] += 1
         perf[w]["success"] += success
-        
+
     # Calculate derived stats
     for w in perf:
         p = perf[w]
         p["success_rate"] = (p["success"] / p["trades"] * 100) if p["trades"] > 0 else 0
         p["is_profitable"] = p["pnl"] > 0
         p["score"] = (p["pnl"] * 0.7) + (p["success_rate"] * 0.3) # Simple ranking score
-        
+
     return perf
+
+
+def get_source_wallet_for_token(token_id: str, target_wallet: str = "") -> str:
+    """
+    Find the source wallet that generated a position (by token_id).
+    Returns the source_wallet from the most recent trade for this token.
+    """
+    trades = read_records("trades")
+    # Filter by target_wallet if provided
+    if target_wallet:
+        trades = [t for t in trades if t.get("wallet", "").lower() == target_wallet.lower()]
+    # Filter by token_id and find most recent
+    token_trades = [t for t in trades if t.get("token_id") == token_id]
+    if not token_trades:
+        return ""
+    # Most recent trade
+    latest = max(token_trades, key=lambda t: t.get("_ts", 0))
+    return latest.get("source_wallet") or ""
+
+
+def get_positions_by_source(target_wallet: str) -> Dict[str, list]:
+    """
+    Group positions by source wallet.
+    Returns: {source_wallet: [token_ids]}
+    """
+    trades = read_records("trades")
+    if target_wallet:
+        trades = [t for t in trades if t.get("wallet", "").lower() == target_wallet.lower()]
+
+    positions_by_source = {}
+    for t in trades:
+        source = t.get("source_wallet") or t.get("wallet") or "unknown"
+        token = t.get("token_id")
+        if token and source:
+            positions_by_source.setdefault(source, []).append(token)
+
+    # Deduplicate tokens per source
+    for source in positions_by_source:
+        positions_by_source[source] = list(set(positions_by_source[source]))
+
+    return positions_by_source
